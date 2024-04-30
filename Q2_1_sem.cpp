@@ -1,8 +1,10 @@
 #include <iostream>
 #include <thread>
+#include <mutex>
 #include <semaphore.h>
 using namespace std;
 
+mutex mtx; // declare mutex
 sem_t sem;
 
 void runMeFirst() {
@@ -14,16 +16,17 @@ void runMeSecond() {
 }
 
 void thread_func(int id) {
-    cout << "Thread " << id << " is waiting..." << endl;
-    sem_wait(&sem); // blocking call
-    cout << "Thread " << id << " has acquired the semaphore";
-    cout << endl;
-    if (id == 0) runMeFirst();
-    if (id == 1) runMeSecond();
-    this_thread::sleep_for(chrono::seconds(2));
-    cout << "Thread " << id << " is releasing the semaphore";
-    cout << endl;
-    sem_post(&sem);
+     mtx.lock(); // acquire lock
+     sem_wait(&sem); // blocking call
+     cout << "Thread " << id << " has acquired the semaphore";
+     cout << endl;
+     if (id == 0) runMeFirst();
+     if (id == 1) runMeSecond();
+     this_thread::sleep_for(chrono::seconds(2));
+     cout << "Thread " << id << " is releasing the semaphore";
+     cout << endl;
+     sem_post(&sem);
+     mtx.unlock // release lock
 }
 
 int main() {
