@@ -12,7 +12,8 @@ condition_variable cv;
 sem_t sem;
 
 int counter = 0;
-string webpages[10] = {"Google.com", "Bing.com", "Yahoo.com", 
+const int webpagesLength = 10;
+string webpages[webpagesLength] = {"Google.com", "Bing.com", "Yahoo.com", 
                     "CoolMathGames.com", "Twitter.com", "Facebook.com", 
                     "Instagram.com", "GoDuckGo.com",
                     "YouTube.com", "Twitch.com"};
@@ -22,11 +23,11 @@ struct requestStructure {
        string ip_address;
        string page_requested;
 };
-
+bool listenExit = false;
 queue<requestStructure> msg_queue;
 
 void listen(int requests) {
-     cout << "Reciever thread started" << endl;
+     
      requestStructure myRequest;
      
      for (int i = 0; i < requests; i++) {
@@ -35,41 +36,56 @@ void listen(int requests) {
          counter++;
          myRequest.request_id = counter;
          myRequest.ip_address = "";
-         myRequest.page_requested = rand() % sizeof(webpages);
+         myRequest.page_requested = webpages[rand() % webpagesLength];
          
-         lock_guard<mutex>lock(mtx);
+         unique_lock<mutex> lock(mtx);
          msg_queue.push(myRequest);
          cout << "Received request " << myRequest.request_id << endl;
+         lock.unlock();
+         
          cv.notify_one();
      }
+     listenExit = true;
+     cv.notify_all();
 }
 
-void do_request() {
-     cout << "Searcher thread started" << endl;
+void do_request(int id) {
      while (true) {
            unique_lock<mutex>lock(mtx);
-           cv.wait(lock, []{return !msg_queue.empty();});
+           while (msg_queue.empty()) {
+           		
+           		if (listenExit && msg_queue.empty()) {
+           			cout << "Thread " << id << " Exits\n";
+           			return;
+           		}
+				cv.wait(lock);  
+		   }
+           
            requestStructure searched = msg_queue.front();
            msg_queue.pop();
-           cout << "Thread " << this_thread::get_id() << " completed request" << endl;
+           cout << "Thread " << id << " completed request" << endl;
            cout << searched.request_id << " requesting webpage " << searched.page_requested << endl;
            lock.unlock();
      }
 }
 
 int main() {
-    const int num_threads = 3;
-    thread requestReciever(listen, num_threads);
+	
+    const int num_requests = 3;
+    thread requestReciever(listen, num_requests);
     // initialize the semaphore with the number of threads
-    sem_init(&sem /*thread*/, 0/*process*/, num_threads);
+    //sem_init(&sem /*thread*/, 0/*process*/, num_threads);
     
-    thread pageSearchers[counter];
+    int num_threads = 3;
+	thread pageSearchers[num_threads];
     for (int i = 0; i < num_threads; ++i) {
-        pageSearchers[i] = thread(do_request);
+        pageSearchers[i] = thread(do_request, i);
     }
+    
+    requestReciever.join();
     for (int i = 0; i < num_threads; ++i) {
         pageSearchers[i].join();
     }
-    sem_destroy(&sem); // destroy the semaphore
+    //sem_destroy(&sem); // destroy the semaphore
     return 0;
 }
